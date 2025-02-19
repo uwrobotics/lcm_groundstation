@@ -68,9 +68,9 @@ class Keyboard:
             if e.char == 's':
                 self.msg.linear = (-self.speed,0.0,0.0)
             if e.char == 'a':
-                self.msg.angular = (0.0,0.0,self.speed)
+                self.msg.angular = (0.0,0.0,-self.speed*0.25)
             if e.char == 'd':
-                self.msg.angular = (0.0,0.0,-self.speed)
+                self.msg.angular = (0.0,0.0,self.speed*0.25)
             print(self.msg.linear, ' ', self.msg.angular)
             self.lc.publish("control", self.msg.encode())
             print (f'down {e.char}')
