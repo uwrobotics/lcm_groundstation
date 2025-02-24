@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Web GUI</title>
+  <!-- Leaflet CSS for the map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body, html {
+      margin: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+    /* Overall container: top bar, middle content row, and bottom message bar */
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    /* Top bar for GPS status */
+    .top-bar {
+      background: #333;
+      color: #fff;
+      padding: 10px;
+      text-align: center;
+    }
+    /* Middle row: left (joystick), center (map), right (status bars) */
+    .middle-row {
+      flex: 1;
+      display: flex;
+    }
+    .left-panel, .right-panel {
+      width: 15%;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    .center-panel {
+      flex: 1;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    /* Joystick container */
+    #joystick-container {
+      width: 100%;
+      height: 300px;
+      border: 1px solid #ccc;
+      border-radius: 50%;
+      position: relative;
+      background: #f9f9f9;
+      touch-action: none;
+    }
+    #joystick-knob {
+      width: 50px;
+      height: 50px;
+      background: #007bff;
+      border-radius: 50%;
+      position: absolute;
+      top: 125px;
+      left: 125px;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+    }
+    /* Map container */
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 400px;
+    }
+    /* Status bars container */
+    .status-bar {
+      margin-bottom: 15px;
+    }
+    .status-bar label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .status-bar input[type="range"] {
+      width: 100%;
+    }
+    /* Bottom system message */
+    .bottom-bar {
+      background: #eee;
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+      border-top: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Top: GPS status -->
+    <div class="top-bar" id="gps-status">
+      GPS Connected: 0 | Status: Disconnected
+    </div>
+    
+    <!-- Middle row: Left joystick, center map, right status bars -->
+    <div class="middle-row">
+      <!-- Left Panel: Joystick -->
+      <div class="left-panel">
+        <h3>Joystick</h3>
+        <div id="joystick-container">
+          <div id="joystick-knob"></div>
+        </div>
+        <p>X: <span id="joy-x">0</span> | Y: <span id="joy-y">0</span></p>
+      </div>
+      
+      <!-- Center Panel: Map -->
+      <div class="center-panel">
+        <div id="map"></div>
+      </div>
+      
+      <!-- Right Panel: 7 Status Bars -->
+      <div class="right-panel">
+        <h3>Status Bars</h3>
+        <div id="status-bars">
+          <!-- Generate 7 status bars -->
+          <div class="status-bar">
+            <label for="status1">Status 1: <span id="status1-val">0</span></label>
+            <input type="range" id="status1" min="-100" max="100" value="0" disabled>
+          </div>
+          <div class="status-bar">
+            <label for="status2">Status 2: <span id="status2-val">0</span></label>
+            <input type="range" id="status2" min="-100" max="100" value="0" disabled>
+          </div>
+          <div class="status-bar">
+            <label for="status3">Status 3: <span id="status3-val">0</span></label>
+            <input type="range" id="status3" min="-100" max="100" value="0" disabled>
+          </div>
+          <div class="status-bar">
+            <label for="status4">Status 4: <span id="status4-val">0</span></label>
+            <input type="range" id="status4" min="-100" max="100" value="0" disabled>
+          </div>
+          <div class="status-bar">
+            <label for="status5">Status 5: <span id="status5-val">0</span></label>
+            <input type="range" id="status5" min="-100" max="100" value="0" disabled>
+          </div>
+          <div class="status-bar">
+            <label for="status6">Status 6: <span id="status6-val">0</span></label>
+            <input type="range" id="status6" min="-100" max="100" value="0" disabled>
+          </div>
+          <div class="status-bar">
+            <label for="status7">Status 7: <span id="status7-val">0</span></label>
+            <input type="range" id="status7" min="-100" max="100" value="0" disabled>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Bottom: System Message -->
+    <div class="bottom-bar" id="system-message">
+      System ready.
+    </div>
+  </div>
+  
+  <!-- Leaflet JS for the map -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    /***** MAP INITIALIZATION *****/
+    // Default center: University of Waterloo, ON, Canada (approximate)
+    const defaultCenter = [43.4723, -80.5449];
+    const map = L.map('map').setView(defaultCenter, 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'Map data © OpenStreetMap contributors'
+    }).addTo(map);
+    
+    // Polyline for GPS path
+    let gpsPathPolyline = L.polyline([], { color: 'red' }).addTo(map);
+    
+    /***** JOYSTICK INITIALIZATION *****/
+    const joystickContainer = document.getElementById('joystick-container');
+    const joystickKnob = document.getElementById('joystick-knob');
+    const joyXDisplay = document.getElementById('joy-x');
+    const joyYDisplay = document.getElementById('joy-y');
+    const containerRect = joystickContainer.getBoundingClientRect();
+    const containerWidth = joystickContainer.clientWidth;
+    const containerHeight = joystickContainer.clientHeight;
+    const centerX = containerWidth / 2;
+    const centerY = containerHeight / 2;
+    
+    let dragging = false;
+    
+    function updateJoystick(knobX, knobY) {
+      // Limit knob within the container (circle)
+      const dx = knobX - centerX;
+      const dy = knobY - centerY;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const maxDist = centerX - 25; // leave room for knob radius
+      
+      let finalX = knobX, finalY = knobY;
+      if (dist > maxDist) {
+        const ratio = maxDist / dist;
+        finalX = centerX + dx * ratio;
+        finalY = centerY + dy * ratio;
+      }
+      joystickKnob.style.left = finalX + "px";
+      joystickKnob.style.top = finalY + "px";
+      
+      // Normalize to range [-1, 1]
+      const normX = (finalX - centerX) / maxDist;
+      const normY = (finalY - centerY) / maxDist;
+      joyXDisplay.textContent = normX.toFixed(2);
+      joyYDisplay.textContent = (-normY).toFixed(2); // invert Y for typical joystick convention
+    }
+    
+    joystickKnob.addEventListener('mousedown', function(e) {
+      dragging = true;
+    });
+    document.addEventListener('mouseup', function(e) {
+      dragging = false;
+      // Return knob to center on release
+      updateJoystick(centerX, centerY);
+    });
+    document.addEventListener('mousemove', function(e) {
+      if (!dragging) return;
+      const rect = joystickContainer.getBoundingClientRect();
+      const knobX = e.clientX - rect.left;
+      const knobY = e.clientY - rect.top;
+      updateJoystick(knobX, knobY);
+    });
+    
+    // Touch events for mobile support
+    joystickContainer.addEventListener('touchstart', function(e) {
+      dragging = true;
+      e.preventDefault();
+    });
+    joystickContainer.addEventListener('touchend', function(e) {
+      dragging = false;
+      updateJoystick(centerX, centerY);
+      e.preventDefault();
+    });
+    joystickContainer.addEventListener('touchmove', function(e) {
+      if (!dragging) return;
+      const rect = joystickContainer.getBoundingClientRect();
+      const touch = e.touches[0];
+      const knobX = touch.clientX - rect.left;
+      const knobY = touch.clientY - rect.top;
+      updateJoystick(knobX, knobY);
+      e.preventDefault();
+    });
+    
+    /***** DATA POLLING FROM BACKEND *****/
+    async function fetchData() {
+      try {
+        const response = await fetch('/data');
+        const data = await response.json();
+        
+        // Update GPS status at the top
+        const gpsStatusDiv = document.getElementById('gps-status');
+        gpsStatusDiv.textContent = `GPS Connected: ${data.gps_status.connected} | Status: ${data.gps_status.status}`;
+        
+        // Update system message at the bottom
+        document.getElementById('system-message').textContent = data.system_message;
+        
+        // Update status bars (7 values)
+        data.status_bars.forEach((value, index) => {
+          const statusInput = document.getElementById(`status${index+1}`);
+          const statusVal = document.getElementById(`status${index+1}-val`);
+          if (statusInput && statusVal) {
+            statusInput.value = value;
+            statusVal.textContent = value;
+          }
+        });
+        
+        // Update map GPS path if provided
+        if (data.gps_path && data.gps_path.length > 0) {
+          gpsPathPolyline.setLatLngs(data.gps_path);
+        } else {
+          gpsPathPolyline.setLatLngs([]);
+        }
+        
+        // Optionally update joystick from backend if needed
+        // (For example, if you want to override the user input)
+        // Example: updateJoystickFromBackend(data.joystick.x, data.joystick.y);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    }
+    
+    // Poll every second (adjust as needed)
+    setInterval(fetchData, 1000);
+    
+    // Initial fetch
+    fetchData();
+  </script>
+</body>
+</html>
